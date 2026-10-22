@@ -1,8 +1,8 @@
 from typing import Optional
-from fastapi import FastAPI, HTTPException, Path, Query, status
+from fastapi import FastAPI, HTTPException, Path, Query, Response, status
 
 # Import unserer Verträge aus dem Schichten modell
-from app.schemas import InquiryCreate, InquiryResponse
+from app.schemas import InquiryCreate, InquiryReplace, InquiryResponse, InquiryUpdate
 
 app = FastAPI(
     title="Anfrage- und Beratungs-Workflows API",
@@ -82,3 +82,52 @@ def get_inquiry(
             detail=f"Anfrage mit ID {inquiry_id} wurde nicht gefunden."
         )
     return db_inquiries[inquiry_id]
+
+
+@app.put(
+    "/inquiries/{inquiry_id}",
+    response_model=InquiryResponse,
+    tags=["Anfragen"]
+)
+def replace_inquiry(
+    inquiry_in: InquiryReplace,
+    inquiry_id: int = Path(..., gt=0, description="Eindeutige ID der Anfrage")
+):
+    """Replace all business fields while preserving server-managed fields."""
+    existing = get_inquiry(inquiry_id)
+    replacement = inquiry_in.model_dump()
+    replacement["id"] = existing["id"]
+    replacement["status"] = existing["status"]
+    db_inquiries[inquiry_id] = replacement
+    return replacement
+
+
+@app.patch(
+    "/inquiries/{inquiry_id}",
+    response_model=InquiryResponse,
+    tags=["Anfragen"]
+)
+def update_inquiry(
+    inquiry_in: InquiryUpdate,
+    inquiry_id: int = Path(..., gt=0, description="Eindeutige ID der Anfrage")
+):
+    """Update only explicitly supplied business fields."""
+    existing = get_inquiry(inquiry_id)
+    changes = inquiry_in.model_dump(exclude_unset=True)
+    existing.update(changes)
+    return existing
+
+
+@app.delete(
+    "/inquiries/{inquiry_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+    tags=["Anfragen"]
+)
+def delete_inquiry(
+    inquiry_id: int = Path(..., gt=0, description="Eindeutige ID der Anfrage")
+) -> Response:
+    """Delete an existing inquiry and return an empty response."""
+    get_inquiry(inquiry_id)
+    del db_inquiries[inquiry_id]
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

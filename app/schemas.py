@@ -1,5 +1,5 @@
 from enum import Enum
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 # 1. Erlaubte Auswahlwerte einschrenken
 
@@ -26,6 +26,36 @@ class InquiryBase(BaseModel):
 
 class InquiryCreate(InquiryBase):
     pass
+
+
+class InquiryReplace(InquiryBase):
+    """Require all business fields when replacing an existing inquiry."""
+
+
+class InquiryUpdate(BaseModel):
+    """Allow omitted fields while rejecting explicit null values."""
+
+    customer_name: str | None = Field(
+        default=None, min_length=2, max_length=100, description="Kundenname"
+    )
+    postal_code: str | None = Field(
+        default=None, min_length=5, max_length=5,
+        pattern=r"^[0-9]{5}$", description="5-stellige deutsche PLZ"
+    )
+    kitchen_type: KitchenType | None = Field(
+        default=None, description="Gewünschte Küchenbauform"
+    )
+    budget: float | None = Field(
+        default=None, gt=0, description="Geplantes Budget in Euro"
+    )
+
+    @field_validator("customer_name", "postal_code", "kitchen_type", "budget", mode="before")
+    @classmethod
+    def reject_explicit_null(cls, value):
+        """Defaults allow omission; supplied fields must contain a value."""
+        if value is None:
+            raise ValueError("Das Feld darf nicht null sein; zum Beibehalten weglassen.")
+        return value
 
 # 4. Schema für die Ausgabe (Response)
 
